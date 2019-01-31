@@ -1,4 +1,4 @@
-Firmware and Bootloader for the Stigmergic Block
+Firmware and Bootloader for the Stigmergic Block (Yatings version)
 ==============
 
 This repository contains the firmware and bootloader for the stigmergic block. The code uses AVR Libc and is based on the Arduino AVR core libraries. In many cases, the Arduino libraries have been significantly modified and only some parts of the code base still resemble the [original code](https://github.com/arduino/ArduinoCore-avr).
