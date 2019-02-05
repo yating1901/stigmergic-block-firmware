@@ -2,6 +2,7 @@
 
 #include "nfc_controller.h"
 
+
 uint8_t ack[6]={
     0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00
 };
@@ -12,11 +13,17 @@ uint8_t nfc_version[6]={
 /***********************************************************/
 /***********************************************************/
 
-bool CNFCController::PowerDown() {
+bool CNFCController::PowerDown(uint8_t Action_record) {
+   //Record the running function here
+   Function_record=EState_function::POWERDOWN;
+
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::POWERDOWN);
    m_punIOBuffer[1] = 0x88; // Wake up on RF field & I2C
    m_punIOBuffer[2] = 0x01; // Generate an IRQ on wake up
    /* write command and check ack frame */
+    
+   if(Action_record==EState_action::IDEL||EState_action::WRITE){
+
    if(!write_cmd_check_ack(m_punIOBuffer, 3)) {
 #ifdef DEBUG
       fprintf(Firmware::GetInstance().m_psTUART, 
@@ -24,9 +31,15 @@ bool CNFCController::PowerDown() {
 #endif
       return false;
    }
+   }
+   
+   if(Action_record==EState_action::IDEL||EState_action::READ){
 
    /* read the rest of the reply */
-   read_dt(m_punIOBuffer, 8);
+   //Yating:need to check the NFC is not ready and return
+      read_dt(m_punIOBuffer, 8);
+
+   }
    /* verify that the recieved data was a reply frame to given command */
    if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
       m_punIOBuffer[NFC_FRAME_ID_INDEX] - 1 != static_cast<uint8_t>(ECommand::POWERDOWN)) {
@@ -244,7 +257,7 @@ bool CNFCController::P2PTargetInit() {
 /*****************************************************************************/
 uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
                                          uint8_t  un_tx_buffer_len,
-                                         uint8_t* pun_rx_buffer,
+                     using namespace std;                    uint8_t* pun_rx_buffer,
                                          uint8_t  un_rx_buffer_len) {
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::INDATAEXCHANGE);
    m_punIOBuffer[1] = 0x01; // logical number of the relevant target
@@ -390,7 +403,10 @@ uint8_t CNFCController::write_cmd_check_ack(uint8_t *cmd, uint8_t len) {
 #endif
 
     // read acknowledgement
-    if (!read_ack()) {
+    // merge the read_ack()
+    uint8_t ack_buf[6] = {0};
+    read_dt(ack_buf, 6);
+    if (!(memcmp(ack_buf, ack, 6) == 0)) {
 #ifdef DEBUG
        fprintf(Firmware::GetInstance().m_psHUART, "No ACK frame received!\r\n");
 #endif
@@ -502,6 +518,7 @@ bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
    uint8_t unStatus = PN532_I2C_BUSY;
    // attempt to read response twenty times
    for(uint8_t i = 0; i < 25; i++) {
+      //Yating:could be deleted, check 20 times without waiting
       Firmware::GetInstance().GetTimer().Delay(10);
       // Start read (n+1 to take into account leading 0x01 with I2C)
       Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
@@ -520,6 +537,7 @@ bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
          for(uint8_t i=0; i<len; i++) {
             Firmware::GetInstance().GetTWController().Read();
          }
+         //Yating: here we should return to wait for the next call
       }
    }
 

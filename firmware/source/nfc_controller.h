@@ -22,6 +22,11 @@ enum class ESAMMode : uint8_t {
    DUAL_CARD    = 0x04
 };
 
+enum class EState_action : uint8_t {
+   WRITE        = 0x01,
+   READ         = 0x02,
+   IDEL         = 0x03
+};
 #define NFC_CMD_BUF_LEN                     64
 
 #define NFC_FRAME_DIRECTION_INDEX           5
@@ -69,6 +74,16 @@ public:
       TGGETTARGETSTATUS     = 0x8A
    };
 
+   enum class EState_function : uint8_t {
+   POWERDOWN            =0x01,
+   PROBE                =0x02,
+   CONFIGURESAM         =0x03,
+   P2PINITIATORINIT     =0X04,
+   P2PTARGETINIT        =0X05,
+   P2PINITIATORTXRX     =0X06,
+   P2PTARGETTXRX        =0X07,
+   VACANT               =0X08
+   };
 
    CNFCController() {}
 
@@ -103,6 +118,9 @@ private:
 
    /* data buffer for reading / writing commands */
    uint8_t m_punIOBuffer[NFC_CMD_BUF_LEN];
+   // Yating: not sure whether it is a good idea to make them private, check later
+   uint8_t Action_record=EState_action::IDEL;
+   uint8_t Function_record=EState_function::VACANT;
 
 };
 
