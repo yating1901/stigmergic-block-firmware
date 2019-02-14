@@ -10,10 +10,11 @@ uint8_t nfc_version[6]={
     0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03
 };
 
+
 /***********************************************************/
 /***********************************************************/
 
-bool CNFCController::PowerDown(uint8_t Action_record) {
+bool CNFCController::PowerDown() {
    //Record the running function here
    Function_record=EState_function::POWERDOWN;
 
@@ -22,23 +23,33 @@ bool CNFCController::PowerDown(uint8_t Action_record) {
    m_punIOBuffer[2] = 0x01; // Generate an IRQ on wake up
    /* write command and check ack frame */
     
-   if(Action_record==EState_action::IDEL||EState_action::WRITE){
+   if(Action_record==EState_action::IDEL||Action_record==EState_action::WRITE){
 
-   if(!write_cmd_check_ack(m_punIOBuffer, 3)) {
+     if(!write_cmd_check_ack(m_punIOBuffer, 3)) {
 #ifdef DEBUG
       fprintf(Firmware::GetInstance().m_psTUART, 
               "PN532 didn't send acknowledgement frame\r\n");
 #endif
+      Action_record=EState_action::WRITE;
       return false;
-   }
+     }
+     else{
+      Action_record=EState_action::IDEL;
+     }
    }
    
-   if(Action_record==EState_action::IDEL||EState_action::READ){
+   if(Action_record==EState_action::IDEL||Action_record==EState_action::READ){
 
    /* read the rest of the reply */
-   //Yating:need to check the NFC is not ready and return
-      read_dt(m_punIOBuffer, 8);
 
+   //Yating:need to check the NFC is not ready and return
+      if(!read_dt(m_punIOBuffer, 8)){
+        Action_record=EState_action::READ;
+        return false;    
+      }
+      else{         
+        Action_record=EState_action::IDEL;       
+      }
    }
    /* verify that the recieved data was a reply frame to given command */
    if(m_punIOBuffer[NFC_FRAME_DIRECTION_INDEX] != PN532_PN532TOHOST ||
@@ -58,6 +69,8 @@ bool CNFCController::PowerDown(uint8_t Action_record) {
 #endif
       return false;
    }
+
+   Function_record=EState_function::VACANT;
    return true;
 }
 
@@ -257,7 +270,7 @@ bool CNFCController::P2PTargetInit() {
 /*****************************************************************************/
 uint8_t CNFCController::P2PInitiatorTxRx(uint8_t* pun_tx_buffer,
                                          uint8_t  un_tx_buffer_len,
-                     using namespace std;                    uint8_t* pun_rx_buffer,
+                                         uint8_t* pun_rx_buffer,
                                          uint8_t  un_rx_buffer_len) {
    m_punIOBuffer[0] = static_cast<uint8_t>(ECommand::INDATAEXCHANGE);
    m_punIOBuffer[1] = 0x01; // logical number of the relevant target
@@ -516,30 +529,25 @@ void CNFCController::write_cmd(uint8_t *cmd, uint8_t len)
 /*****************************************************************************/
 bool CNFCController::read_dt(uint8_t *buf, uint8_t len) {
    uint8_t unStatus = PN532_I2C_BUSY;
-   // attempt to read response twenty times
-   for(uint8_t i = 0; i < 25; i++) {
-      //Yating:could be deleted, check 20 times without waiting
-      Firmware::GetInstance().GetTimer().Delay(10);
-      // Start read (n+1 to take into account leading 0x01 with I2C)
-      Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
-      // Read the status byte
-      unStatus = Firmware::GetInstance().GetTWController().Read();
+   
+   // Start read (n+1 to take into account leading 0x01 with I2C)
+   Firmware::GetInstance().GetTWController().Read(PN532_I2C_ADDRESS, len + 2, true);
+   // Read the status byte
+   unStatus = Firmware::GetInstance().GetTWController().Read();
 
 #ifdef DEBUG
       fprintf(Firmware::GetInstance().m_psTUART,"rdt: status = 0x%02x\r\n", unStatus);
 #endif
     
-      if(unStatus == PN532_I2C_READY) {
-         break;
-      }
-      else {
+   if(unStatus != PN532_I2C_READY) {
          // flush the buffer
          for(uint8_t i=0; i<len; i++) {
             Firmware::GetInstance().GetTWController().Read();
          }
          //Yating: here we should return to wait for the next call
+         return false;
       }
-   }
+   
 
    if(unStatus == PN532_I2C_READY) {
 
